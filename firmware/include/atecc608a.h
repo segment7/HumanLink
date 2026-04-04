@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <Arduino.h>
+#include <ArduinoECCX08.h>
 #include "protocol.h"
 
 class SecureEnclave {
@@ -52,6 +52,11 @@ public:
      * Returns true if the device key has been provisioned and locked.
      */
     bool isProvisioned();
+
+    /**
+     * Check if chip configuration is locked.
+     */
+    bool isLocked();
 
 private:
     bool _provisioned = false;

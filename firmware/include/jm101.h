@@ -32,7 +32,6 @@ public:
 
     /**
      * Initialize UART. Returns true when sensor responds to handshake.
-     * In mock mode always returns true.
      */
     bool begin();
 
@@ -63,6 +62,14 @@ public:
      */
     void cancel();
 
+    /**
+     * Enroll a new fingerprint template.
+     * @param slot_id  Template slot to store (1-200)
+     * @param timeout_ms Max wait time for finger placement
+     * @return HL_OK on success, HL_ERR_* on failure
+     */
+    int enrollFingerprint(uint16_t slot_id, uint32_t timeout_ms = 30000);
+
 private:
     HardwareSerial& _serial;
     uint32_t        _baud;
@@ -71,4 +78,5 @@ private:
     void     _sendPacket(uint8_t pid, const uint8_t* payload, uint16_t len);
     int      _recvPacket(uint8_t* buf, uint16_t buflen, uint16_t& paylen, uint32_t timeout_ms = 2000);
     uint16_t _checksum(uint8_t pid, const uint8_t* data, uint16_t len);
+    int      _captureAndGenerate(uint8_t buffer_id, uint32_t timeout_ms);
 };

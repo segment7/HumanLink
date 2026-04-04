@@ -1,9 +1,7 @@
 /**
  * JM-101 Fingerprint Sensor Driver Implementation
  *
- * Real hardware path: full UART packet protocol per JM-101 spec.
- * Mock path (#define HUMANLINK_MOCK_HARDWARE): returns fixed test values
- *   so the full enclave state machine can be exercised without hardware.
+ * Full UART packet protocol per JM-101 spec.
  */
 
 #include "jm101.h"
@@ -20,24 +18,23 @@ static const uint8_t  CMD_AUTO_IDENTIFY   = 0x32;
 static const uint8_t  CMD_GET_CHIP_SN     = 0x34;
 static const uint8_t  CMD_VALID_TMPL_NUM  = 0x1D;
 static const uint8_t  CMD_CANCEL          = 0x30;
+static const uint8_t  CMD_AUTO_ENROLL     = 0x31;
+static const uint8_t  CMD_GET_IMAGE       = 0x01;
+static const uint8_t  CMD_GENERATE_CHAR   = 0x02;
+static const uint8_t  CMD_CREATE_TEMPLATE = 0x05;
+static const uint8_t  CMD_STORE_TEMPLATE  = 0x06;
 
 // ── Confirmation codes ─────────────────────────────────────────────────────
 static const uint8_t  CC_OK               = 0x00;
 static const uint8_t  CC_NO_FINGER        = 0x02;
 static const uint8_t  CC_NO_MATCH         = 0x09;
 static const uint8_t  CC_NO_TEMPLATE      = 0x4B; // sensor-specific: empty DB
+static const uint8_t  CC_ENROLL_OK        = 0x00;
+static const uint8_t  CC_IMAGE_OK         = 0x00;
+static const uint8_t  CC_DEFECTIVE_IMAGE  = 0x06;
+static const uint8_t  CC_IMAGE_TOO_DRY    = 0x07;
+static const uint8_t  CC_IMAGE_TOO_WET    = 0x08;
 
-// ── Mock fingerprint slot / score returned in test mode ───────────────────
-#ifdef HUMANLINK_MOCK_HARDWARE
-static const uint16_t MOCK_MATCHED_ID = 1;
-static const uint16_t MOCK_SCORE      = 188;
-static const uint8_t  MOCK_SN[32]     = {
-    0xDE,0xAD,0xBE,0xEF, 0xCA,0xFE,0xBA,0xBE,
-    0x01,0x23,0x45,0x67, 0x89,0xAB,0xCD,0xEF,
-    0xFE,0xDC,0xBA,0x98, 0x76,0x54,0x32,0x10,
-    0x11,0x22,0x33,0x44, 0x55,0x66,0x77,0x88
-};
-#endif
 
 // ── Constructor ────────────────────────────────────────────────────────────
 JM101::JM101(HardwareSerial& serial, uint32_t baud)
@@ -45,34 +42,39 @@ JM101::JM101(HardwareSerial& serial, uint32_t baud)
 
 // ── begin ──────────────────────────────────────────────────────────────────
 bool JM101::begin() {
-#ifdef HUMANLINK_MOCK_HARDWARE
-    Serial.println("[JM101] MOCK: sensor ready");
-    return true;
-#else
     _serial.begin(_baud, SERIAL_8N2);
-    delay(200);
+    delay(500);  // Give sensor more time to initialize
 
-    // Probe: query template count; expect any valid ACK back
-    uint8_t cmd[] = {CMD_VALID_TMPL_NUM};
-    _sendPacket(PID_CMD, cmd, 1);
+    Serial.println("[JM101] Probing fingerprint sensor...");
 
-    uint8_t buf[32];
-    uint16_t plen = 0;
-    int r = _recvPacket(buf, sizeof(buf), plen, 1500);
-    return (r == HL_OK);
-#endif
+    // Try multiple probe attempts
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        Serial.printf("[JM101] Probe attempt %d/3\\n", attempt);
+
+        // Probe: query template count; expect any valid ACK back
+        uint8_t cmd[] = {CMD_VALID_TMPL_NUM};
+        _sendPacket(PID_CMD, cmd, 1);
+
+        uint8_t buf[32];
+        uint16_t plen = 0;
+        int r = _recvPacket(buf, sizeof(buf), plen, 2000);
+
+        if (r == HL_OK) {
+            Serial.printf("[JM101] Sensor responded successfully on attempt %d\\n", attempt);
+            return true;
+        }
+
+        Serial.printf("[JM101] Attempt %d failed, retrying...\\n", attempt);
+        delay(500);
+    }
+
+    Serial.println("[JM101] All probe attempts failed");
+    Serial.println("[JM101] Check UART connections and power supply");
+    return false;
 }
 
 // ── autoIdentify ──────────────────────────────────────────────────────────
 int JM101::autoIdentify(uint32_t timeout_ms, uint16_t& matched_id, uint16_t& score) {
-#ifdef HUMANLINK_MOCK_HARDWARE
-    Serial.println("[JM101] MOCK: waiting for finger (2s simulated)...");
-    delay(2000);
-    matched_id = MOCK_MATCHED_ID;
-    score      = MOCK_SCORE;
-    Serial.printf("[JM101] MOCK: matched slot=%u score=%u\n", matched_id, score);
-    return HL_OK;
-#else
     // PS_AutoIdentify: cmd=0x32, SecurityLevel(2B) + MatchScore(2B) + FpgroupCnt(2B)
     // SecurityLevel 0x0003 = level 3; MatchScore 0x0064 = 100; FpGroupCnt 0x0001
     uint8_t cmd[] = {
@@ -107,15 +109,10 @@ int JM101::autoIdentify(uint32_t timeout_ms, uint16_t& matched_id, uint16_t& sco
         return HL_ERR_SENSOR;
     }
     return HL_ERR_TIMEOUT;
-#endif
 }
 
 // ── getChipSN ─────────────────────────────────────────────────────────────
 int JM101::getChipSN(uint8_t sn[HL_SENSOR_SERIAL_LEN]) {
-#ifdef HUMANLINK_MOCK_HARDWARE
-    memcpy(sn, MOCK_SN, HL_SENSOR_SERIAL_LEN);
-    return HL_OK;
-#else
     uint8_t cmd[] = {CMD_GET_CHIP_SN};
     _sendPacket(PID_CMD, cmd, 1);
 
@@ -128,14 +125,10 @@ int JM101::getChipSN(uint8_t sn[HL_SENSOR_SERIAL_LEN]) {
     // ACK: CC(1) + SN(32)
     memcpy(sn, buf + 1, HL_SENSOR_SERIAL_LEN);
     return HL_OK;
-#endif
 }
 
 // ── validTemplateCount ────────────────────────────────────────────────────
 int JM101::validTemplateCount() {
-#ifdef HUMANLINK_MOCK_HARDWARE
-    return 3;  // Simulate 3 registered fingerprints
-#else
     uint8_t cmd[] = {CMD_VALID_TMPL_NUM};
     _sendPacket(PID_CMD, cmd, 1);
 
@@ -145,15 +138,59 @@ int JM101::validTemplateCount() {
     if (r != HL_OK || plen < 3 || buf[0] != CC_OK) return -1;
 
     return ((int)buf[1] << 8) | buf[2];
-#endif
 }
 
 // ── cancel ────────────────────────────────────────────────────────────────
 void JM101::cancel() {
-#ifndef HUMANLINK_MOCK_HARDWARE
     uint8_t cmd[] = {CMD_CANCEL};
     _sendPacket(PID_CMD, cmd, 1);
-#endif
+}
+
+// ── enrollFingerprint ─────────────────────────────────────────────────────
+int JM101::enrollFingerprint(uint16_t slot_id, uint32_t timeout_ms) {
+    Serial.printf("[JM101] Enrolling fingerprint to slot %u...\n", slot_id);
+
+    // Step 1: Capture first image
+    Serial.println("[JM101] Place finger on sensor for first capture...");
+    int r = _captureAndGenerate(0, timeout_ms);
+    if (r != HL_OK) return r;
+
+    Serial.println("[JM101] Remove finger and place again for second capture...");
+    delay(1000);  // Give user time to remove finger
+
+    // Step 2: Capture second image
+    r = _captureAndGenerate(1, timeout_ms);
+    if (r != HL_OK) return r;
+
+    // Step 3: Create template from two captures
+    uint8_t create_cmd[] = {CMD_CREATE_TEMPLATE};
+    _sendPacket(PID_CMD, create_cmd, 1);
+
+    uint8_t buf[16];
+    uint16_t plen = 0;
+    r = _recvPacket(buf, sizeof(buf), plen, 5000);
+    if (r != HL_OK || plen < 1 || buf[0] != CC_OK) {
+        Serial.println("[JM101] Template creation failed");
+        return HL_ERR_SENSOR;
+    }
+
+    // Step 4: Store template to slot
+    uint8_t store_cmd[] = {
+        CMD_STORE_TEMPLATE,
+        0x01,  // BufferID
+        (uint8_t)(slot_id >> 8),
+        (uint8_t)(slot_id & 0xFF)
+    };
+    _sendPacket(PID_CMD, store_cmd, 4);
+
+    r = _recvPacket(buf, sizeof(buf), plen, 5000);
+    if (r != HL_OK || plen < 1 || buf[0] != CC_OK) {
+        Serial.println("[JM101] Template storage failed");
+        return HL_ERR_SENSOR;
+    }
+
+    Serial.printf("[JM101] Fingerprint enrolled successfully to slot %u\n", slot_id);
+    return HL_OK;
 }
 
 // ── _sendPacket ───────────────────────────────────────────────────────────
@@ -228,4 +265,49 @@ uint16_t JM101::_checksum(uint8_t pid, const uint8_t* data, uint16_t len) {
     uint16_t sum    = (uint16_t)pid + (length >> 8) + (length & 0xFF);
     for (uint16_t i = 0; i < len; i++) sum += data[i];
     return sum;
+}
+
+// ── _captureAndGenerate ───────────────────────────────────────────────────
+int JM101::_captureAndGenerate(uint8_t buffer_id, uint32_t timeout_ms) {
+    // Step 1: Get image
+    uint8_t img_cmd[] = {CMD_GET_IMAGE};
+    _sendPacket(PID_CMD, img_cmd, 1);
+
+    uint32_t deadline = millis() + timeout_ms;
+    while (millis() < deadline) {
+        uint8_t buf[16];
+        uint16_t plen = 0;
+        int r = _recvPacket(buf, sizeof(buf), plen, 2000);
+        if (r != HL_OK) continue;
+
+        if (plen < 1) continue;
+        uint8_t cc = buf[0];
+
+        if (cc == CC_IMAGE_OK) {
+            // Image captured successfully, now generate character file
+            uint8_t char_cmd[] = {CMD_GENERATE_CHAR, buffer_id};
+            _sendPacket(PID_CMD, char_cmd, 2);
+
+            r = _recvPacket(buf, sizeof(buf), plen, 5000);
+            if (r == HL_OK && plen >= 1 && buf[0] == CC_OK) {
+                return HL_OK;
+            } else {
+                Serial.println("[JM101] Character generation failed");
+                return HL_ERR_SENSOR;
+            }
+        }
+        if (cc == CC_NO_FINGER) continue;  // Still waiting for finger
+        if (cc == CC_DEFECTIVE_IMAGE) {
+            Serial.println("[JM101] Image quality too poor, try again");
+            continue;
+        }
+        if (cc == CC_IMAGE_TOO_DRY || cc == CC_IMAGE_TOO_WET) {
+            Serial.println("[JM101] Image condition not optimal, try again");
+            continue;
+        }
+
+        Serial.printf("[JM101] Image capture error: cc=0x%02X\n", cc);
+        return HL_ERR_SENSOR;
+    }
+    return HL_ERR_TIMEOUT;
 }

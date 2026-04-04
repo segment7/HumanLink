@@ -27,8 +27,6 @@
  * Output on error:
  *   {"status":"err","code":2,"msg":"no match"}
  *
- * Build with -DHUMANLINK_MOCK_HARDWARE=1 (env:esp32dev_mock) to run
- * without any physical hardware. The full state machine still executes.
  */
 
 #include <Arduino.h>
@@ -49,6 +47,10 @@ static const uint32_t AUTH_TIMEOUT_MS = 30000;  // 30 s
 // ── Protocol version ───────────────────────────────────────────────────────
 static const char* PROTOCOL_VERSION = "0.3";
 
+// ── Auto-initialization settings ──────────────────────────────────────────
+static const int MIN_REQUIRED_FINGERPRINTS = 1;  // At least 1 fingerprint needed
+static const int MAX_ENROLLMENT_ATTEMPTS = 3;    // Max retries per enrollment
+
 // ── Module instances ───────────────────────────────────────────────────────
 static JM101         sensor(Serial2);
 static SecureEnclave se;
@@ -57,8 +59,13 @@ static SecureEnclave se;
 static char device_did[HL_DID_MAX_LEN] = {0};  // Cached did:key for responses
 
 // ── State ──────────────────────────────────────────────────────────────────
-enum class State { IDLE, AUTHORIZING };
-static State state = State::IDLE;
+enum class State {
+    INITIALIZING,    // First boot: need to enroll fingerprints
+    IDLE,           // Ready for auth commands
+    AUTHORIZING,    // Processing auth request
+    ENROLLING       // Fingerprint enrollment in progress
+};
+static State state = State::INITIALIZING;
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -240,6 +247,129 @@ static void sendError(int code, const char* msg) {
     Serial.println();
 }
 
+// ── Send status notification ──────────────────────────────────────────────
+static void sendStatus(const char* event, const char* message) {
+    JsonDocument doc;
+    doc["event"] = event;
+    doc["message"] = message;
+    doc["protocol"] = PROTOCOL_VERSION;
+    serializeJson(doc, Serial);
+    Serial.println();
+}
+
+// ── Hardware diagnostic test ──────────────────────────────────────────────
+static void runDiagnostics() {
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    Serial.println("[HumanLink] HARDWARE DIAGNOSTICS");
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Test JM-101
+    Serial.println();
+    Serial.println("1. Testing JM-101 Fingerprint Sensor:");
+    Serial.printf("   Pins: RX=GPIO%d, TX=GPIO%d\\n", JM101_RX_PIN, JM101_TX_PIN);
+    bool jm101_ok = sensor.begin();
+    if (jm101_ok) {
+        int templates = sensor.validTemplateCount();
+        Serial.printf("   ✓ JM-101 responding, %d templates enrolled\\n", templates);
+    } else {
+        Serial.println("   ✗ JM-101 not responding");
+    }
+
+    Serial.println();
+    Serial.println("2. Testing ATECC608A Secure Element:");
+    Serial.println("   Pins: SDA=GPIO21, SCL=GPIO22");
+
+    // Reinitialize to get fresh status
+    bool atecc_ok = se.begin();
+    if (atecc_ok) {
+        Serial.printf("   ✓ ATECC608A responding, provisioned=%s, locked=%s\\n",
+                     se.isProvisioned() ? "true" : "false",
+                     se.isLocked() ? "true" : "false");
+    } else {
+        Serial.println("   ✗ ATECC608A not responding");
+    }
+
+    Serial.println();
+    Serial.println("3. Overall Status:");
+    if (jm101_ok && atecc_ok) {
+        Serial.println("   ✓ All hardware components detected");
+        Serial.println("   Ready for initialization");
+    } else {
+        Serial.println("   ✗ Hardware issues detected");
+        Serial.println("   Please check connections and power supply");
+    }
+
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+}
+
+// ── Auto-initialization flow ──────────────────────────────────────────────
+static bool runAutoInitialization() {
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    Serial.println("[HumanLink] FIRST BOOT DETECTED");
+    Serial.println("[HumanLink] Starting auto-initialization...");
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Check if ATECC608A needs provisioning
+    if (!se.isProvisioned() || !se.isLocked()) {
+        Serial.println("[HumanLink] ATECC608A needs provisioning...");
+        sendStatus("initializing", "Configuring secure element...");
+
+        if (!se.begin()) {
+            Serial.println("[HumanLink] ERROR: ATECC608A initialization failed");
+            sendStatus("init_error", "Secure element initialization failed");
+            return false;
+        }
+        Serial.println("[HumanLink] ATECC608A provisioned successfully");
+    }
+
+    // Check if fingerprints need enrollment
+    int enrolled = sensor.validTemplateCount();
+    if (enrolled < MIN_REQUIRED_FINGERPRINTS) {
+        Serial.printf("[HumanLink] Need to enroll %d fingerprint(s)\n", MIN_REQUIRED_FINGERPRINTS - enrolled);
+        sendStatus("enrolling", "Please enroll your fingerprints");
+
+        for (int slot = 1; slot <= MIN_REQUIRED_FINGERPRINTS; slot++) {
+            Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            Serial.printf("[HumanLink] Enrolling fingerprint %d/%d\n", slot, MIN_REQUIRED_FINGERPRINTS);
+            Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+            char msg[64];
+            snprintf(msg, sizeof(msg), "Enrolling fingerprint %d/%d", slot, MIN_REQUIRED_FINGERPRINTS);
+            sendStatus("enrolling", msg);
+
+            int attempts = 0;
+            while (attempts < MAX_ENROLLMENT_ATTEMPTS) {
+                int r = sensor.enrollFingerprint(slot, 30000);
+                if (r == HL_OK) {
+                    Serial.printf("[HumanLink] Fingerprint %d enrolled successfully\n", slot);
+                    break;
+                } else if (r == HL_ERR_TIMEOUT) {
+                    Serial.println("[HumanLink] Enrollment timeout, trying again...");
+                    attempts++;
+                } else {
+                    Serial.printf("[HumanLink] Enrollment failed (error %d), trying again...\n", r);
+                    attempts++;
+                }
+
+                if (attempts >= MAX_ENROLLMENT_ATTEMPTS) {
+                    Serial.printf("[HumanLink] Failed to enroll fingerprint %d after %d attempts\n", slot, MAX_ENROLLMENT_ATTEMPTS);
+                    sendStatus("init_error", "Fingerprint enrollment failed");
+                    return false;
+                }
+            }
+        }
+    }
+
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    Serial.println("[HumanLink] INITIALIZATION COMPLETE");
+    Serial.printf("[HumanLink] Device ready with %d enrolled fingerprint(s)\n", sensor.validTemplateCount());
+    Serial.println("[HumanLink] You can now use authentication commands");
+    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    sendStatus("ready", "Device initialization complete");
+    return true;
+}
+
 // ── Core authorization flow ────────────────────────────────────────────────
 static void runAuth(const uint8_t h_doc[HL_H_DOC_LEN], const uint8_t nonce[HL_NONCE_LEN],
                     const HL_DisplayInfo& display) {
@@ -351,22 +481,57 @@ void setup() {
 
     Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     Serial.printf("[HumanLink] Firmware v%s starting\n", PROTOCOL_VERSION);
-#ifdef HUMANLINK_MOCK_HARDWARE
-    Serial.println("[HumanLink] *** MOCK HARDWARE MODE ***");
-#endif
     Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     // Init JM-101 on Serial2
+    Serial.println("[HumanLink] Initializing JM-101 fingerprint sensor...");
+    Serial.printf("[HumanLink] JM-101 pins: RX=GPIO%d, TX=GPIO%d\n", JM101_RX_PIN, JM101_TX_PIN);
     Serial2.begin(57600, SERIAL_8N2, JM101_RX_PIN, JM101_TX_PIN);
     if (!sensor.begin()) {
         Serial.println("[HumanLink] ERROR: JM-101 sensor init failed");
+        Serial.println("[HumanLink] Please check:");
+        Serial.println("[HumanLink]   - JM-101 power supply (3.3V or 5V)");
+        Serial.println("[HumanLink]   - UART connections: RX->GPIO16, TX->GPIO17");
+        Serial.println("[HumanLink]   - Ground connection");
         // Continue — will report per-auth
+    } else {
+        Serial.println("[HumanLink] JM-101 sensor connected successfully");
     }
 
     // Init ATECC608A
+    Serial.println("[HumanLink] Initializing ATECC608A secure element...");
+    Serial.println("[HumanLink] I2C pins: SDA=GPIO21, SCL=GPIO22");
     if (!se.begin()) {
         Serial.println("[HumanLink] ERROR: ATECC608A secure element init failed");
+        Serial.println("[HumanLink] Please check:");
+        Serial.println("[HumanLink]   - ATECC608A power supply (3.3V)");
+        Serial.println("[HumanLink]   - I2C connections: SDA->GPIO21, SCL->GPIO22");
+        Serial.println("[HumanLink]   - I2C pull-up resistors (4.7kΩ)");
+        Serial.println("[HumanLink]   - Ground connection");
         // Continue — will report per-auth
+    } else {
+        Serial.println("[HumanLink] ATECC608A connected successfully");
+    }
+
+    // Check if auto-initialization is needed
+    bool needs_init = false;
+    if (!se.isProvisioned() || !se.isLocked()) {
+        needs_init = true;
+    } else if (sensor.validTemplateCount() < MIN_REQUIRED_FINGERPRINTS) {
+        needs_init = true;
+    }
+
+    if (needs_init) {
+        if (runAutoInitialization()) {
+            state = State::IDLE;
+        } else {
+            Serial.println("[HumanLink] Initialization failed, device not ready");
+            // Stay in INITIALIZING state to allow retry
+            return;  // Exit setup, will retry in loop
+        }
+    } else {
+        Serial.println("[HumanLink] Device already initialized");
+        state = State::IDLE;
     }
 
     // Derive device DID from public key
@@ -380,15 +545,22 @@ void setup() {
     }
 
     // Emit device ready signal (PC SDK polls this)
-    JsonDocument ready;
-    ready["event"]       = "ready";
-    ready["protocol"]    = PROTOCOL_VERSION;
-    ready["device_did"]  = device_did;  // Auto-export DID for on-chain registration
-#ifdef HUMANLINK_MOCK_HARDWARE
-    ready["mock"]        = true;
-#endif
-    serializeJson(ready, Serial);
-    Serial.println();
+    if (state == State::IDLE) {
+        JsonDocument ready;
+        ready["event"]       = "ready";
+        ready["protocol"]    = PROTOCOL_VERSION;
+        ready["device_did"]  = device_did;  // Auto-export DID for on-chain registration
+        ready["enrolled"]    = sensor.validTemplateCount();
+        serializeJson(ready, Serial);
+        Serial.println();
+    } else {
+        JsonDocument init_needed;
+        init_needed["event"]    = "init_required";
+        init_needed["protocol"] = PROTOCOL_VERSION;
+        init_needed["message"]  = "Device requires initialization - use 'init' command";
+        serializeJson(init_needed, Serial);
+        Serial.println();
+    }
 }
 
 // ── loop ───────────────────────────────────────────────────────────────────
@@ -421,8 +593,16 @@ void loop() {
 
             // ── "auth" command ─────────────────────────────────────────────
             if (strcmp(cmd_str, "auth") == 0) {
+                if (state == State::INITIALIZING) {
+                    sendError(HL_ERR_BAD_INPUT, "device not ready, initialization required");
+                    continue;
+                }
                 if (state == State::AUTHORIZING) {
                     sendError(HL_ERR_BAD_INPUT, "auth already in progress");
+                    continue;
+                }
+                if (state == State::ENROLLING) {
+                    sendError(HL_ERR_BAD_INPUT, "enrollment in progress");
                     continue;
                 }
 
@@ -464,14 +644,19 @@ void loop() {
             } else if (strcmp(cmd_str, "status") == 0) {
                 JsonDocument resp;
                 resp["status"]       = "ok";
-                resp["state"]        = (state == State::IDLE) ? "idle" : "authorizing";
+                const char* state_str = "unknown";
+                switch (state) {
+                    case State::INITIALIZING: state_str = "initializing"; break;
+                    case State::IDLE:         state_str = "idle"; break;
+                    case State::AUTHORIZING:  state_str = "authorizing"; break;
+                    case State::ENROLLING:    state_str = "enrolling"; break;
+                }
+                resp["state"]        = state_str;
                 resp["provisioned"]  = se.isProvisioned();
                 resp["enrolled"]     = sensor.validTemplateCount();
                 resp["protocol"]     = PROTOCOL_VERSION;
                 resp["device_did"]   = device_did;  // For SDK to query DID
-#ifdef HUMANLINK_MOCK_HARDWARE
-                resp["mock"]         = true;
-#endif
+                resp["needs_init"]   = (state == State::INITIALIZING);
                 serializeJson(resp, Serial);
                 Serial.println();
 
@@ -487,10 +672,46 @@ void loop() {
             // ── "cancel" command ───────────────────────────────────────────
             } else if (strcmp(cmd_str, "cancel") == 0) {
                 sensor.cancel();
-                state = State::IDLE;
+                if (state == State::AUTHORIZING || state == State::ENROLLING) {
+                    state = State::IDLE;
+                }
                 JsonDocument resp;
                 resp["status"] = "ok";
                 resp["msg"]    = "cancelled";
+                serializeJson(resp, Serial);
+                Serial.println();
+
+            // ── "init" command ─────────────────────────────────────────────
+            } else if (strcmp(cmd_str, "init") == 0) {
+                if (state != State::IDLE && state != State::INITIALIZING) {
+                    sendError(HL_ERR_BAD_INPUT, "cannot init while busy");
+                    continue;
+                }
+
+                Serial.println("[HumanLink] Manual initialization requested");
+                state = State::INITIALIZING;
+                if (runAutoInitialization()) {
+                    state = State::IDLE;
+                    JsonDocument resp;
+                    resp["status"] = "ok";
+                    resp["msg"] = "initialization complete";
+                    serializeJson(resp, Serial);
+                    Serial.println();
+                } else {
+                    JsonDocument resp;
+                    resp["status"] = "err";
+                    resp["code"] = HL_ERR_SENSOR;
+                    resp["msg"] = "initialization failed";
+                    serializeJson(resp, Serial);
+                    Serial.println();
+                }
+
+            // ── "diag" command ─────────────────────────────────────────────
+            } else if (strcmp(cmd_str, "diag") == 0) {
+                runDiagnostics();
+                JsonDocument resp;
+                resp["status"] = "ok";
+                resp["msg"] = "diagnostics complete";
                 serializeJson(resp, Serial);
                 Serial.println();
 
