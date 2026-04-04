@@ -35,7 +35,7 @@ HumanLink 是 AI Agent 时代的人类授权基础设施。类比 MCP 定义 Age
 | 链上合约 | Solidity 0.8.x, Hardhat, Sepolia 测试网 |
 | Verifier SDK | Python 3.11+ |
 
-PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecdsa`（签名验证）、`pyld`（JSON-LD 规范化）、`web3.py`（链上交互）、`sqlite3`（本地存储）、`websockets`（toB WebSocket）
+PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecdsa`（签名验证）、`pyld`（JSON-LD 规范化）、`web3.py`（链上交互）、`sqlite3`（本地存储）、`websockets`（云端流程 WebSocket）
 
 ---
 
@@ -70,7 +70,7 @@ PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecds
 ## 链上合约（Sepolia）
 
 - `IssuerRegistry.sol`：设备注册/注销/查询
-- `UserDeviceRegistry.sol`：用户账号 ↔ 设备 DID 绑定（toC 主用）
+- `UserDeviceRegistry.sol`：用户账号 ↔ 设备 DID 绑定（本地流程主用）
 - `AssertionStatusRegistry.sol`：断言撤销
 
 **不上链**：生物特征、私钥、Assertion 原文、用户真实身份
@@ -88,20 +88,20 @@ PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecds
 7. matchScore ≥ min_match_score
 8. attestation 满足 trust_policy
 9. ECDSA 签名验证
-10. 链上校验：isValidIssuer() + isRevoked()（toC 可选）
+10. 链上校验：isValidIssuer() + isRevoked()（本地流程可选）
 
 ---
 
-## toC vs toB 对比
+## 本地 vs 云端 对比
 
-| | toB 平台 | toC 本地 |
+| | 云端 平台 | 本地 |
 |--|----------|----------|
 | Challenge 生成方 | 云端平台服务器 | 本地 OpenClaw |
 | 链上检查 | 必须 | 可选（降级为本地信任） |
 | 举证对象 | 平台向第三方举证 | 用户向应用/审计方自证 |
 | 通信 | WebSocket 接收云端 Challenge | USB Serial 直连 |
 
-toC 集成：OpenClaw（本地 AI Gateway）作为第四层护栏，通过 `approval_hook` 调用 HumanLink 本地 SDK。
+本地 集成：OpenClaw（本地 AI Gateway）作为第四层护栏，通过 `approval_hook` 调用 HumanLink 本地 SDK。
 
 ---
 
@@ -116,8 +116,8 @@ humanlink/
 │   ├── firmware/      # ESP32 固件 C++（main.cpp, jm101.cpp, atecc608a.cpp）
 │   ├── core/          # PC SDK 守护进程 Python（hardware/, assertion/, identity/, crypto/, chain/, api/, db/）
 │   └── apps/
-│       ├── toB_platform/   # toB Demo（WebSocket 模拟云端）
-│       └── toC_openclaw/   # toC + OpenClaw Demo
+│       ├── cloud_platform/  # 云端 Demo（WebSocket 模拟云端）
+│       └── local_openclaw/  # 本地 OpenClaw Demo
 ├── config.yaml
 └── requirements.txt
 ```
