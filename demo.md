@@ -109,8 +109,8 @@ PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecds
 
 ```
 humanlink/
-├── protocol/          # 协议规范（assertion_spec.md, hai_spec.md, verification_spec.md）
-├── sdk/               # Verifier SDK（verifier.py, local_verifier.py, client.py）
+├── protocol/          # 协议规范
+├── sdk/               # Verifier SDK（verifier.py, client.py）
 ├── contracts/         # 链上合约（IssuerRegistry, UserDeviceRegistry, AssertionStatusRegistry）
 ├── reference/
 │   ├── firmware/      # ESP32 固件 C++（main.cpp, jm101.cpp, atecc608a.cpp）

@@ -4,7 +4,7 @@
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档  
-**适用方：** OpenClaw（approval_hook 实现方）、HumanLink PC SDK（LocalHumanLinkVerifier + HumanLinkClient）
+**适用方：** OpenClaw（approval_hook 实现方）、HumanLink PC SDK（HumanLinkVerifier + HumanLinkClient）
 
 ---
 
@@ -21,7 +21,7 @@ humanlink_approval(command, context) → bool
   │ 调用
   ▼
 HumanLink PC SDK
-  ├─ LocalHumanLinkVerifier  ← 生成 Challenge、本地验证
+  ├─ HumanLinkVerifier  ← 生成 Challenge、本地验证
   └─ HumanLinkClient         ← USB Serial 通信
        │
        ▼
@@ -31,7 +31,7 @@ HumanLink PC SDK
      HumanPresenceAssertion
        │
        ▼
-     LocalHumanLinkVerifier.verify()
+     HumanLinkVerifier.verify()
        │ 10 步校验
        ▼
      审计日志写入
@@ -198,10 +198,10 @@ def humanlink_approval(command: str, context: dict) -> bool:
 
 ## 5. PC SDK 对外接口
 
-### 5.1 LocalHumanLinkVerifier
+### 5.1 HumanLinkVerifier
 
 ```python
-class LocalHumanLinkVerifier:
+class HumanLinkVerifier:
     def __init__(self, config_path: str):
         """
         加载 ~/.humanlink/config.yaml：

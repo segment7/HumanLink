@@ -4,7 +4,7 @@
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档  
-**适用方：** Verifier SDK（云端流程）、LocalHumanLinkVerifier（本地流程）
+**适用方：** Verifier SDK（云端流程）、HumanLinkVerifier（本地流程）
 
 ---
 

@@ -504,9 +504,9 @@ OpenClaw 侧只需在审批钩子里调用 HumanLink 本地 SDK，无需改动 P
 # openclaw_humanlink_hook.py
 # 挂载到 OpenClaw 的 approval_hook 扩展点
 
-from humanlink_sdk import LocalHumanLinkVerifier, HumanLinkClient
+from humanlink_sdk import HumanLinkVerifier, HumanLinkClient
 
-verifier = LocalHumanLinkVerifier(
+verifier = HumanLinkVerifier(
     config_path="~/.humanlink/config.yaml"
 )
 client = HumanLinkClient(transport="usb")  # 或 "bluetooth"
@@ -1214,12 +1214,11 @@ humanlink/
 │   ├── assertion_spec.md              ← HumanPresenceAssertion 格式规范
 │   ├── hai_spec.md                    ← 硬件抽象接口 (HAI) 规范
 │   ├── verification_spec.md           ← 10 步验证流程规范
-│   └── context/
-│       └── v0-3.jsonld                  ← @context 定义
+│   ├── PC SDK↔Firmware.md            ← actionHash/signedHash 构造 + USB Serial 接口契约
+│   └── PC SDK↔AI Gateway.md          ← OpenClaw approval_hook ↔ PC SDK 接口契约
 │
 ├── sdk/                               ← Verifier SDK
-│   ├── verifier.py                    ← 云端验证器
-│   ├── local_verifier.py              ← 本地验证器
+│   ├── verifier.py                    ← 验证器（chain_check 配置决定是否上链）
 │   ├── client.py                      ← USB Serial Issuer 客户端
 │   ├── trust_policy.py                ← 设备信任策略
 │   ├── device_registry.py             ← 用户-设备绑定管理

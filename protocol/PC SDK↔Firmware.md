@@ -64,7 +64,7 @@ actionHash = hashlib.sha256(raw).hexdigest()
 | 场景 | 构造方 |
 |------|--------|
 | 云端流程 | Agent 平台（拦截真实 API 参数后构造） |
-| 本地流程 (OpenClaw) | `LocalHumanLinkVerifier.create_challenge()` |
+| 本地流程 (OpenClaw) | `HumanLinkVerifier.create_challenge()` |
 
 > 固件**不**构造 actionHash，只接收并将其包含在 `h_doc` 中签名。
 
