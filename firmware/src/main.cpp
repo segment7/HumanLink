@@ -42,7 +42,7 @@ static const int JM101_RX_PIN = 16;
 static const int JM101_TX_PIN = 17;
 
 // ── Fingerprint timeout ────────────────────────────────────────────────────
-static const uint32_t AUTH_TIMEOUT_MS = 30000;  // 30 s
+static const uint32_t AUTH_TIMEOUT_MS = 20000;  // 20 s
 
 // ── Protocol version ───────────────────────────────────────────────────────
 static const char* PROTOCOL_VERSION = "0.3";
