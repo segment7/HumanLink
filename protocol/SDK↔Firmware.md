@@ -1,4 +1,4 @@
-# PC SDK ↔ 硬件固件 契约
+# SDK ↔ 硬件固件 契约
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档（唯一权威来源）  
@@ -251,6 +251,6 @@ Verifier                        ⑥  重建 signedHash，验证签名
 
 ## 5. 互操作性要求
 
-任何实现 HumanLink HAI（Hardware Abstraction Interface）的设备，其 signedHash 构造**必须**与第 3 节完全一致，以确保 Verifier SDK 可无缝验证不同硬件的签名。
+任何实现 HumanLink HAI（Hardware Abstraction Interface）的设备，其 signedHash 构造**必须**与第 3 节完全一致，以确保 HumanLinkVerifier 可无缝验证不同硬件的签名。
 
 字段顺序、字节序、长度均为**规范性要求（MUST）**，不得变更。

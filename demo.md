@@ -33,7 +33,7 @@ HumanLink 是 AI Agent 时代的人类授权基础设施。类比 MCP 定义 Age
 | ESP32 固件 | PlatformIO + Arduino Framework, C++ |
 | PC SDK 守护进程 | Python 3.11+, FastAPI, uvicorn |
 | 链上合约 | Solidity 0.8.x, Hardhat, Sepolia 测试网 |
-| Verifier SDK | Python 3.11+ |
+| HumanLink SDK | Python 3.11+ |
 
 PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecdsa`（签名验证）、`pyld`（JSON-LD 规范化）、`web3.py`（链上交互）、`sqlite3`（本地存储）、`websockets`（云端流程 WebSocket）
 
@@ -110,19 +110,20 @@ PC SDK 第三方库：`fastapi` + `uvicorn`、`pyserial`（USB Serial）、`ecds
 ```
 humanlink/
 ├── protocol/          # 协议规范
-├── sdk/               # Verifier SDK（verifier.py, client.py）
+├── sdk/               # HumanLink SDK（守护进程 + 验证器，本地/云端共用）
+│   ├── verifier.py / client.py / types.py
+│   ├── hardware/ assertion/ identity/ crypto/ chain/
+│   ├── api/           # FastAPI 守护进程入口（server.py, ws_client.py）
+│   └── db/
+├── firmware/          # ESP32 固件 C++（main.cpp, jm101.cpp, atecc608a.cpp）
 ├── contracts/         # 链上合约（IssuerRegistry, UserDeviceRegistry, AssertionStatusRegistry）
-├── reference/
-│   ├── firmware/      # ESP32 固件 C++（main.cpp, jm101.cpp, atecc608a.cpp）
-│   ├── core/          # PC SDK 守护进程 Python（hardware/, assertion/, identity/, crypto/, chain/, api/, db/）
-│   └── apps/
-│       ├── cloud_platform/  # 云端 Demo（WebSocket 模拟云端）
-│       └── local_openclaw/  # 本地 OpenClaw Demo
+├── apps/
+│   └── openclaw/      # OpenClaw approval_hook Demo
 ├── config.yaml
 └── requirements.txt
 ```
 
-PC SDK API 端点（localhost:8765）：
+HumanLink SDK API 端点（localhost:8765）：
 - `POST /auth/challenge`
 - `GET /auth/status`
 - `GET /device/did`
@@ -132,4 +133,4 @@ PC SDK API 端点（localhost:8765）：
 ---
 
 **Why:** 项目是黑客松 Demo，需要端到端跑通 HumanLink 协议。
-**How to apply:** 开发时以参考实现为准，SDK 在 `sdk/` 和 `reference/core/`，固件在 `reference/firmware/`，合约在 `contracts/`。
+**How to apply:** SDK 在 `sdk/`，固件在 `firmware/`，合约在 `contracts/`。守护进程入口是 `sdk/api/server.py`。

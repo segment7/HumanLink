@@ -4,7 +4,7 @@
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档  
-**适用方：** PC SDK、Verifier SDK、Agent 平台、审计系统
+**适用方：** PC SDK、HumanLinkVerifier、Agent 平台、审计系统
 
 ---
 

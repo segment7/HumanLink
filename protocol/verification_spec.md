@@ -4,7 +4,7 @@
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档  
-**适用方：** Verifier SDK（云端流程）、HumanLinkVerifier（本地流程）
+**适用方：** HumanLinkVerifier（本地/云端统一，chain_check 配置决定步骤 10 是否执行）
 
 ---
 
@@ -261,8 +261,7 @@ class VerificationResult:
 ## 4. 配置参数
 
 ```yaml
-# ~/.humanlink/config.yaml（本地流程）
-# 或 verifier_sdk config（云端流程）
+# Verifier SDK 统一配置（本地和云端均使用相同配置结构）
 
 verification:
   chain_check: "optional"     # required | optional | skip

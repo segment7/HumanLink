@@ -1,6 +1,6 @@
-# PC SDK ↔ 本地 AI Gateway 契约
+# SDK ↔ 本地 AI Gateway 契约
 
->**PC SDK ↔ OpenClaw 会话规范**
+>**SDK ↔ OpenClaw 会话规范**
 
 **版本：** HumanLink Protocol v0.3  
 **状态：** 规范性文档  

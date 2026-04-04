@@ -10,7 +10,7 @@
 
 ## 1. 概述
 
-HAI（Hardware Abstraction Interface）定义了 HumanLink 协议对**硬件设备**的最小接口约定。任何满足 HAI 规范的设备均可作为合法的 HumanLink Issuer（签发者），接受 Verifier SDK 验证。
+HAI（Hardware Abstraction Interface）定义了 HumanLink 协议对**硬件设备**的最小接口约定。任何满足 HAI 规范的设备均可作为合法的 HumanLink Issuer（签发者），接受 HumanLinkVerifier 验证。
 
 HAI 包含两层：
 
@@ -91,7 +91,7 @@ HAI 包含两层：
 - 锁定后私钥**永不可读取或覆写**
 - 锁定状态通过 `is_locked()` 可查询
 
-> **必须锁定才能视为安全设备。** Verifier SDK 的 `trust_policy=default` 要求设备在 Attestation 中声明 `secureElement=ATECC608A`，并要求固件已调用 `provision()` 且已锁定。
+> **必须锁定才能视为安全设备。** HumanLinkVerifier 的 `trust_policy=default` 要求设备在 Attestation 中声明 `secureElement=ATECC608A`，并要求固件已调用 `provision()` 且已锁定。
 
 #### `is_locked() → bool`
 
