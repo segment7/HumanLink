@@ -16,143 +16,23 @@ HumanLink 是 AI Agent 时代的人类授权基础设施。类比 MCP 定义 Age
 
 ```
 humanlink/
-├── protocol/          # 协议规范
-├── sdk/               # HumanLink SDK（守护进程 + 验证器，本地/云端共用）
-│   ├── verifier.py / client.py / types.py
-│   ├── hardware/ assertion/ identity/ crypto/ chain/
-│   ├── api/           # FastAPI 守护进程入口（server.py, ws_client.py）
-│   └── db/
-├── firmware/          # ESP32 固件 C++（main.cpp, jm101.cpp, atecc608a.cpp）
-├── contracts/         # 链上合约（IssuerRegistry, UserDeviceRegistry, AssertionStatusRegistry）
-├── apps/
-│   └── openclaw/      # OpenClaw approval_hook Demo
-├── config.yaml
-└── requirements.txt
+humalink/
+├── doc/                               ← 模块参数说明书
+├── protocol/                          ← 协议栈设计
+├── sdk/                               ← HumanLink SDK（守护进程 + 验证器）
+├── firmware/                          ← ESP32 固件 (C++)
+├── README.md                          ← 项目主说明
+└── demo.md                            ← DEMO说明
 ```
-
-HumanLink SDK API 端点（localhost:8765）：
-- `POST /auth/challenge`
-- `GET /auth/status`
-- `GET /device/did`
-- `GET /device/attestation`
-- `POST /assertion/revoke`
-
 ---
 
 **Why:** 项目是黑客松 Demo，需要端到端跑通 HumanLink 协议。
-**How to apply:** SDK 在 `sdk/`，固件在 `firmware/`，合约在 `contracts/`。守护进程入口是 `sdk/api/server.py`。
+**How to apply:** SDK 在 `sdk/`，固件在 `firmware/`。守护进程入口是 `sdk/api/run_server.py`。
 
 ## Demo 实现架构
 
 > ESP32 U盾（ESP32-WROOM + JM-101 + ATECC608A）是 HumanLink 协议的第一个 HAI 实现实例。U盾通过 USB Serial 插入 PC，PC 运行 HumanLink SDK 守护进程——协议端到端跑通。
 > 
-
-### 文件总结构
-
-```
-humanlink/
-├── protocol/                          ← 协议规范（唯一权威来源）
-│   ├── assertion_spec.md              ← HumanPresenceAssertion 格式规范
-│   ├── hai_spec.md                    ← 硬件抽象接口 (HAI) 规范
-│   ├── verification_spec.md           ← 10 步验证流程规范
-│   ├── SDK↔Firmware.md            ← actionHash/signedHash 构造 + USB Serial 接口契约
-│   └── SDK↔AI Gateway.md          ← OpenClaw approval_hook ↔ PC SDK 接口契约
-│
-├── sdk/                               ← HumanLink SDK（守护进程 + 验证器）
-│   ├── verifier.py                    ← HumanLinkVerifier（chain_check 配置决定是否上链）
-│   ├── client.py                      ← USB Serial Issuer 客户端
-│   ├── trust_policy.py                ← 设备信任策略
-│   ├── device_registry.py             ← 用户-设备绑定管理
-│   ├── types.py                       ← 类型定义
-│   ├── hardware/
-│   │   ├── usb_bridge.py              ← USB Serial 通信
-│   │   └── protocol.py                ← 数据帧协议
-│   ├── assertion/
-│   │   ├── builder.py                 ← 组装 + 规范化 + 注入
-│   │   └── schema.py                  ← 结构校验
-│   ├── identity/
-│   │   ├── issuer_did.py              ← 设备 DID
-│   │   └── did_resolver.py            ← DID 解析
-│   ├── crypto/
-│   │   ├── ecdsa_verify.py            ← 签名验证
-│   │   └── hash_engine.py             ← JSON-LD 规范化 + H_doc
-│   ├── chain/
-│   │   ├── issuer_registry.py         ← 合约调用
-│   │   ├── user_device_registry.py    ← 用户设备注册
-│   │   └── assertion_status.py        ← 撤销管理
-│   ├── api/
-│   │   ├── server.py                  ← FastAPI 守护进程入口
-│   │   ├── routes.py                  ← 路由
-│   │   └── ws_client.py               ← 云端流程：WebSocket 接收云端 Challenge
-│   └── db/
-│       └── store.py                   ← SQLite
-│
-├── firmware/                          ← ESP32 固件 (C++)
-│   ├── platformio.ini
-│   └── src/
-│       ├── main.cpp                   ← 主循环
-│       ├── jm101.cpp / .h             ← JM-101 驱动
-│       ├── atecc608a.cpp / .h         ← ATECC608A I2C 封装
-│       └── protocol.h                 ← 协议常量与结构体
-│
-├── contracts/                         ← 链上合约
-│   ├── IssuerRegistry.sol
-│   ├── UserDeviceRegistry.sol         ← 用户账号↔设备DID绑定
-│   ├── AssertionStatusRegistry.sol
-│   ├── hardhat.config.js
-│   └── scripts/deploy.js
-│
-├── apps/
-│   └── openclaw/                      ← OpenClaw approval_hook Demo
-│
-├── config.yaml
-├── requirements.txt
-└── README.md
-```
-
-```yaml
-# config.yaml 参考实现配置
-
-# config.yaml
-
-hardware:
-  sensor: "jm101"
-  sensor_baud: 57600
-  controller: "esp32"
-  secure_element: "atecc608a"
-  se_slot: 0
-  transport: "usb_serial"
-  serial_port: "/dev/ttyUSB0" # Linux/Windows 用 "COM3"；Mac 用 "/dev/tty.usbserial-*"
-  usb_baud: 115200
-
-protocol:
-  version: "0.3"
-  context_local: "/etc/humanlink/context-v1.jsonld"
-
-chain:
-  network: "sepolia"
-  rpc_url: "https://sepolia.infura.io/v3/_KEY"
-  issuer_registry: "0x..."
-  user_device_registry: "0x..."
-  assertion_status: "0x..."
-
-verification:
-	chain_check: "required"    # 云端: required；本地: optional / skip
-  max_age_seconds: 30
-  min_match_score: 100
-  trust_policy: "default"             # default / strict / custom
-  enforce_device_binding: true        # 开启设备绑定
-
-# 云端场景：WebSocket 接收云端 Challenge
-gateway:
-  mode: "websocket"                   # websocket（云端）| local（本地）
-  ws_url: "wss://platform.example.com/humanlink/ws"
-  token: "YOUR_DEVICE_TOKEN"
-  
-api:
-  host: "127.0.0.1"
-  port: 8765
-```
 
 ### 硬件架构
 
@@ -183,18 +63,17 @@ api:
 #### 接线
 
 ```
+- 电路图/接线图：
 ESP32-WROOM-32          JM-101                ATECC608A
 ──────────────          ──────                ─────────
-TX0 (GPIO1) ─────────── RX (Pin3)
-RX0 (GPIO3) ─────────── TX (Pin2)
+GPIO17──────────────── RX (Pin3)
+GPIO16──────────────── TX (Pin2)
 3.3V ───────────────── VCC (Pin1)
 GND ────────────────── GND (Pin4)
-GPIO4 ─────────────── Touch (Pin5, 可选中断唤醒)
-3.3V ──────────────── TouchVin (Pin6)
-GPIO21 (SDA) ──────────────────────────────── SDA
-GPIO22 (SCL) ──────────────────────────────── SCL
-3.3V ────────────────────────────────────── VCC
-GND ─────────────────────────────────────── GND
+GPIO21 (SDA) ────────────────────────────────── SDA
+GPIO22 (SCL) ────────────────────────────────── SCL
+3.3V ────────────────────────────────────────── VCC
+GND ─────────────────────────────────────────── GND
 
 USB-Serial 芯片（CH340 / CP2102）
   → USB Type-A 插头，接主机 PC
@@ -635,6 +514,6 @@ audit:
 7. matchScore ≥ min_match_score
 8. attestation 满足 trust_policy
 9. ECDSA 签名验证
-10. 链上校验：isValidIssuer() + isRevoked()（本地流程可选）
+10. 链上校验：isValidIssuer() + isRevoked()（可选）
 
 ---
