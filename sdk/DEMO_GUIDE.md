@@ -20,7 +20,7 @@
 
 ```bash
 cd sdk/
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
@@ -37,7 +37,7 @@ websockets-12.0 aiohttp-3.9.1 requests-2.31.0 ...
 ## 二、一键演示（推荐）
 
 ```bash
-python3 cli.py demo
+python cli.py demo
 ```
 
 此命令自动启动三个组件并发送模拟审批事件：
@@ -142,7 +142,7 @@ Gateway received resolution: deny
 ### 终端 1：启动 SDK Daemon
 
 ```bash
-python3 cli.py daemon run --sdk-only
+python cli.py daemon run --sdk-only
 ```
 
 **预期输出：**
@@ -164,7 +164,7 @@ Waiting for exec.approval events...
 ### 终端 2：查看状态
 
 ```bash
-python3 cli.py status
+python cli.py status
 ```
 
 **预期输出（有设备）：**
@@ -188,7 +188,7 @@ python3 cli.py status
 ### 终端 2：触发测试认证
 
 ```bash
-python3 cli.py auth test --command "kubectl delete namespace production"
+python cli.py auth test --command "kubectl delete namespace production"
 ```
 
 **预期输出：**
@@ -212,10 +212,10 @@ python3 cli.py auth test --command "kubectl delete namespace production"
 
 ```bash
 # 自定义命令
-python3 cli.py demo --command "ssh root@prod-server 'shutdown -h now'"
+python cli.py demo --command "ssh root@prod-server 'shutdown -h now'"
 
 # 指定端口
-python3 cli.py demo --port 19999 --sdk-port 9876
+python cli.py demo --port 19999 --sdk-port 9876
 ```
 
 ---
@@ -303,7 +303,7 @@ open http://127.0.0.1:8765/docs
 | 问题                                            | 解决方法                                             |
 | --------------------------------------------- | ------------------------------------------------ |
 | `ModuleNotFoundError: No module named 'rich'` | `pip install -r requirements.txt`                |
-| `SDK daemon not reachable`                    | 先在终端 1 启动 `python3 cli.py daemon run --sdk-only` |
+| `SDK daemon not reachable`                    | 先在终端 1 启动 `python cli.py daemon run --sdk-only` |
 | `Device not connected` (503)                  | 插入 U盾 USB 设备，或理解为安全策略生效                          |
 | 端口冲突                                          | 使用 `--sdk-port` 和 `--port` 指定其他端口                |
 | `No module named 'data_types'`                | 确保从 `sdk/` 目录运行，不要从项目根目录                         |

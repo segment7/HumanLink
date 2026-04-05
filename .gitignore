@@ -11,3 +11,6 @@ sdk/crypto/__pycache__/
 sdk/db/__pycache__/
 sdk/hardware/__pycache__/
 sdk/.venv
+sdk/bridge/__pycache__/
+
+sdk/__pycache__/
