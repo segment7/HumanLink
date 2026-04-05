@@ -77,14 +77,10 @@ SDK 侧：FastAPI、uvicorn、pyserial、ecdsa、cryptography、sqlite3、websoc
 │  │       └─────────────┘                   │                   │
 │  │                 ↓ 需要审批               │                   │
 │  │  ┌──────────────────────────────────┐   │                   │
-│  │  │  执行审批钩子                     │   │                   │
-│  │  │  approval_hook(command, context) │   │                   │
-│  │  │                                  │   │                   │
-│  │  │  if requires_humanlink(command): │   │                   │
-│  │  │    → 调用 HumanLink 本地 SDK     │   │                   │
+        发送exec.approval.requested 事件
 │  │  └──────────────────────────────────┘   │                   │
 │  └──────────────────────┬───────────────────┘                   │
-│                         ▼                                        │
+│                         ▼  WebSocket                            │
 │  ┌──────────────────────────────────────────┐                   │
 │  │  HumanLink SDK（HumanLinkVerifier）       │                   │
 │  │                                          │                   │
