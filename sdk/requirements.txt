@@ -1,0 +1,27 @@
+# HumanLink SDK Requirements
+
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Serial communication
+pyserial==3.5
+
+# Cryptography
+cryptography==41.0.7
+
+# Configuration
+PyYAML==6.0.1
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Optional: for enhanced serial port detection
+# pywin32==306  # Windows only
+# pyobjc-core==10.0  # macOS only

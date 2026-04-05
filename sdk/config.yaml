@@ -1,0 +1,43 @@
+# HumanLink SDK Configuration
+# This is the reference configuration file for the HumanLink SDK
+
+hardware:
+  sensor: "jm101"
+  sensor_baud: 57600
+  controller: "esp32"
+  secure_element: "atecc608a"
+  se_slot: 0
+  transport: "usb_serial"
+  serial_port: "COM3"  # Linux/Windows use "COM3"; Mac use "/dev/tty.usbserial-*"
+  usb_baud: 115200
+
+protocol:
+  version: "0.3"
+  context_local: "/etc/humanlink/context-v1.jsonld"
+
+# Chain configuration (optional for local mode)
+chain:
+  network: "sepolia"
+  rpc_url: "https://sepolia.infura.io/v3/_KEY_"
+  issuer_registry: "0x..."
+  user_device_registry: "0x..."
+  assertion_status: "0x..."
+
+verification:
+  chain_check: "skip"          # Options: required / optional / skip
+  max_age_seconds: 30
+  min_match_score: 70
+  trust_policy: "default"      # Options: default / strict / custom
+  enforce_device_binding: true
+  storage_path: "~/.humanlink/verifier.db"
+
+# Cloud mode configuration (optional)
+gateway:
+  mode: "local"                # Options: websocket / local
+  ws_url: "wss://platform.example.com/humanlink/ws"
+  token: "DEVICE_TOKEN"
+
+api:
+  host: "127.0.0.1"
+  port: 8765
+  log_level: "info"
