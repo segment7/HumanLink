@@ -6,7 +6,7 @@ Sends exec.approval.requested events so the Bridge can process them
 through the full HumanLink biometric authentication flow.
 
 Usage:
-    Standalone:  python3 -m bridge.mock_gateway
+    Standalone:  python -m bridge.mock_gateway
     Via CLI:     humanlink demo  (starts everything together)
 """
 import asyncio

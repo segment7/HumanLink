@@ -11,33 +11,24 @@
 | ------ | ----------------------- |
 | Python | 3.9+                    |
 | OS     | macOS / Linux / Windows |
-| U盾设备   | 可选（无设备可使用模拟模式）          |
+| HumanLink设备   | 可选（无设备可使用模拟模式）          |
 
 
 ---
 
-## 一、环境准备
+## 环境准备
 
 ```bash
 cd sdk/
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate        # Windows: source venv/Scripts/activate
 pip install -r requirements.txt
 ```
 
-**预期结果：**
-
-```
-Successfully installed fastapi-0.104.1 uvicorn-0.24.0 rich-13.7.0
-websockets-12.0 aiohttp-3.9.1 requests-2.31.0 ...
-```
-
----
-
-## 二、一键演示（推荐）
+## 一键演示（推荐）
 
 ```bash
-python3 cli.py demo
+python cli.py demo
 ```
 
 此命令自动启动三个组件并发送模拟审批事件：
@@ -50,7 +41,7 @@ python3 cli.py demo
 │       ↓  POST /auth/challenge + /auth/execute           │
 │  SDK Daemon (http://127.0.0.1:8765)                     │
 │       ↓  USB 通信                                       │
-│  U盾 设备 (指纹采集 + ECDSA 签名)                       │
+│  HumanLink 设备 (指纹采集 + ECDSA 签名)                       │
 │       ↑  assertion 返回                                  │
 │  SDK Daemon → 10步验证                                   │
 │       ↑  allow-once / deny                               │
@@ -63,11 +54,11 @@ python3 cli.py demo
 ```
 ╭─────────────────────────────────────────────────────────╮
 │ HumanLink Demo Mode                                     │
-│ 一键演示: Mock Gateway → Bridge → SDK → U盾             │
+│ 一键演示: Mock Gateway → Bridge → SDK → HumanLink             │
 ╰─────────────────────────────────────────────────────────╯
   Mock Gateway          ws://127.0.0.1:18789
   SDK Daemon            http://127.0.0.1:8765
-  Device Mode           USB U盾
+  Device Mode           USB HumanLink
 
 ✓ SDK daemon starting...
 ✓ Mock Gateway starting on ws://127.0.0.1:18789
@@ -78,7 +69,7 @@ All components running.
 ╭─────────────────────────────────────────────────────────╮
 │ Sending 3 simulated exec.approval.requested events      │
 │ Each event triggers the full: Gateway → Bridge → SDK →  │
-│ U盾 flow                                                │
+│ HumanLink flow                                                │
 ╰─────────────────────────────────────────────────────────╯
 
 ━━━ Demo [1/3] ━━━
@@ -92,11 +83,11 @@ Agent requests to delete critical user data
 │                                                          │
 ╰──────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────╮
-│              ▶ 请触碰 U盾确认...                          │
+│              ▶ 请触碰 HumanLink确认...                          │
 ╰──────────────────────────────────────────────────────────╯
 ```
 
-### 有 U盾 时（认证成功）
+### 有 HumanLink 时（认证成功）
 
 用户触碰设备后，显示 10 步验证进度：
 
@@ -123,7 +114,7 @@ Agent requests to delete critical user data
 Gateway received resolution: allow-once
 ```
 
-### 无 U盾 时（预期超时）
+### 无 HumanLink 时（预期超时）
 
 SDK daemon 启动时无法连接设备，`auth/execute` 返回 503：
 
@@ -131,98 +122,21 @@ SDK daemon 启动时无法连接设备，`auth/execute` 返回 503：
 Gateway received resolution: deny
 ```
 
-这是**正确行为** — 表明安全策略生效：无物理设备 = 无法授权。
+这表明安全策略生效：无物理设备 = 无法授权。
 
 ---
 
-## 三、分步手动演示
-
-适合需要逐步讲解每个组件的场景。
-
-### 终端 1：启动 SDK Daemon
-
-```bash
-python3 cli.py daemon run --sdk-only
+## API 直接调用（高级）
+### 守护程序启动指南
+```
+cd sdk && python -m venv venv  
+mac:source venv/bin/activate  
+win: source venv/Scripts/activate   
+pip install -r requirements.txt  
+python run_server.py
 ```
 
-**预期输出：**
-
-```
-╭─────────────────────────────────────────────────────────╮
-│ HumanLink Daemon                                        │
-│ Agent 人类授权基础设施 — 守护进程                         │
-╰─────────────────────────────────────────────────────────╯
-  SDK URL           http://127.0.0.1:8765
-  Mode              SDK only
-
-✓ SDK API server starting on http://127.0.0.1:8765
-
-Daemon running. Press Ctrl+C to stop.
-Waiting for exec.approval events...
-```
-
-### 终端 2：查看状态
-
-```bash
-python3 cli.py status
-```
-
-**预期输出（有设备）：**
-
-```
-╭──────────────────────────────────────────────────────────╮
-│ HumanLink Status                                         │
-╰──────────────────────────────────────────────────────────╯
-  SDK Daemon              ● Running
-  Device Connected        ● Yes
-  Device DID              did:key:z6MkBob...
-```
-
-**预期输出（无设备）：**
-
-```
-  SDK Daemon              ● Running
-  Device Connected        ● No
-```
-
-### 终端 2：触发测试认证
-
-```bash
-python3 cli.py auth test --command "kubectl delete namespace production"
-```
-
-**预期输出：**
-
-```
-╭──────────── HumanLink Authorization ────────────────────╮
-│   Action    kubectl delete namespace production          │
-│   Risk      ██████████ HIGH                              │
-│   Agent     test-cli                                     │
-╰──────────────────────────────────────────────────────────╯
-  Session: a1b2c3d4-...
-
-╭──────────────────────────────────────────────────────────╮
-│              ▶ 请触碰 U盾确认...                          │
-╰──────────────────────────────────────────────────────────╯
-```
-
----
-
-## 四、自定义演示命令
-
-```bash
-# 自定义命令
-python3 cli.py demo --command "ssh root@prod-server 'shutdown -h now'"
-
-# 指定端口
-python3 cli.py demo --port 19999 --sdk-port 9876
-```
-
----
-
-## 五、API 直接调用（高级）
-
-SDK daemon 运行时，可直接调用 REST API：
+守护程序 运行时，可直接调用 REST API：
 
 ```bash
 # 健康检查
@@ -253,7 +167,7 @@ open http://127.0.0.1:8765/docs
 
 ---
 
-## 六、架构说明
+## 架构说明
 
 ```
                     ┌──────────────────────────┐
@@ -281,37 +195,23 @@ open http://127.0.0.1:8765/docs
                     └──────────┬───────────────┘
                                │ USB Serial
                     ┌──────────▼───────────────┐
-                    │   HumanLink U盾 硬件      │
+                    │   HumanLink HumanLink 硬件      │
                     │   指纹采集 → ECDSA签名    │
                     │   安全芯片 ATECC608A      │
                     └──────────────────────────┘
 ```
 
-**核心安全保证：**
+**核心安全设计：**
 
 - Gateway 代码：零修改（标准 OpenClaw exec approval 机制）
 - SDK 代码：零修改（标准 HumanLink 认证 API）
 - Bridge 仅做协议转换，不持有密钥、不做风险决策
-- 私钥永不离开 U盾 安全芯片
+- 私钥永不离开 HumanLink 安全芯片
 - 每次授权产生不可伪造的 ECDSA 签名断言
 
 ---
 
-## 七、常见问题
-
-
-| 问题                                            | 解决方法                                             |
-| --------------------------------------------- | ------------------------------------------------ |
-| `ModuleNotFoundError: No module named 'rich'` | `pip install -r requirements.txt`                |
-| `SDK daemon not reachable`                    | 先在终端 1 启动 `python3 cli.py daemon run --sdk-only` |
-| `Device not connected` (503)                  | 插入 U盾 USB 设备，或理解为安全策略生效                          |
-| 端口冲突                                          | 使用 `--sdk-port` 和 `--port` 指定其他端口                |
-| `No module named 'data_types'`                | 确保从 `sdk/` 目录运行，不要从项目根目录                         |
-
-
----
-
-## 八、文件结构
+## 文件结构
 
 ```
 sdk/
