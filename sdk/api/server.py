@@ -402,8 +402,11 @@ async def perform_authentication(session_id: str):
         session["verification_progress"] = 0
         logger.info(f"Session {session_id}: 开始十步验证 assertion_id={assertion.id}")
 
-        # Perform 10-step verification
-        verification_result = perform_detailed_verification(session_id, assertion.to_dict(), challenge)
+        # Perform 10-step verification (run in thread to avoid blocking event loop)
+        loop = asyncio.get_event_loop()
+        verification_result = await loop.run_in_executor(
+            None, perform_detailed_verification, session_id, assertion.to_dict(), challenge
+        )
 
         if verification_result["valid"]:
             # Update session: authentication successful
@@ -631,6 +634,24 @@ async def get_device_status():
         # Get device status
         status = client.get_device_status()
         device_did = client.get_device_did()
+
+        # Auto-register device if connected but not in verifier store
+        if device_did and verifier and verifier.store:
+            try:
+                existing = verifier.store.get_device(device_did)
+            except Exception:
+                existing = None
+            if not existing:
+                default_attestation = {
+                    "sensor_type": "optical_fingerprint",
+                    "sensor_far": 0.00001,
+                    "sensor_frr": 0.01,
+                    "secure_element": "ATECC608A",
+                    "liveness_detection": False
+                }
+                public_key = "placeholder_public_key"
+                if verifier.store.store_device(device_did, public_key, default_attestation):
+                    logger.info(f"Device auto-registered in database: {device_did}")
 
         return DeviceStatusResponse(
             connected=True,

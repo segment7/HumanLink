@@ -14,6 +14,18 @@ cryptography==41.0.7
 # Configuration
 PyYAML==6.0.1
 
+# CLI and TUI
+rich==13.7.0
+click==8.1.7
+
+# Gateway bridge
+websockets==12.0
+aiohttp==3.9.1
+requests==2.31.0
+
+# System notifications (optional)
+# pystray==0.19.5  # for system tray icon
+
 # Development and testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
