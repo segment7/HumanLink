@@ -1,2 +1,0 @@
-"""HumanLink desktop prompt application."""
-
